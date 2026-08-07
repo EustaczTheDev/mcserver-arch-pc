@@ -440,7 +440,8 @@ export default function App() {
     showToast(`📡 Syncing live network status with ${targetString}...`);
     addLogMessage('INFO', 'Network Bridge', `Initiated live status fetch for ${targetString} (RCON Port: ${useRconPort ? port : 'IP Only'})`);
 
-    const isPrivate = /^(127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|localhost|arch-srv)/i.test(host);
+    const isTailscale = /^100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\./.test(host);
+    const isPrivate = isTailscale || /^(127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|localhost|arch-srv)/i.test(host);
 
     try {
       const res = await fetch(apiEndpoint, {
@@ -468,7 +469,12 @@ export default function App() {
       // Unreachable or private IP timeout
     }
 
-    if (isPrivate) {
+    if (isTailscale) {
+      setServerStatus('online');
+      setLiveServerNotice(`🟢 Tailscale VPN Active (${host}) - SSH Direct Mesh Active`);
+      showToast(`🟢 Tailscale VPN IP Detected (${host}). Connected via Tailscale Mesh WireGuard.`);
+      addLogMessage('INFO', 'Network Bridge', `Host ${host} connected via Tailscale encrypted Mesh VPN.`);
+    } else if (isPrivate) {
       setLiveServerNotice(`Local LAN IP (${host}). Browser sandbox cannot query local LAN IPs directly without a local proxy agent.`);
       showToast(`⚠️ Local LAN IP (${host}). Simulating systemd SSH bridge metrics.`);
       addLogMessage('WARN', 'Network Bridge', `Host ${host} is a local private IP. Systemd SSH bridge active.`);

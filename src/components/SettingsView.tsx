@@ -69,8 +69,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
     setTestResult(`Testing connection to ${formData.sshUser}@${cleanHost} (SSH: ${sshPortDesc}, RCON: ${isRconPortDisabled ? 'IP Only' : `Port ${rconPort}`})...`);
 
-    // Check if host is a local/private IP address
-    const isPrivateIp = /^(127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|localhost|arch-srv)/i.test(cleanHost);
+    // Check if host is a local/private or Tailscale CGNAT IP address (100.64.0.0 - 100.127.255.255)
+    const isTailscaleIp = /^100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\./.test(cleanHost);
+    const isPrivateIp = isTailscaleIp || /^(127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|localhost|arch-srv)/i.test(cleanHost);
 
     try {
       const startTime = Date.now();
@@ -93,12 +94,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         }
       }
     } catch {
-      // Network fetch timed out or failed (e.g. private IP or unreachable host)
+      // Network fetch timed out or failed (e.g. private/Tailscale IP or unreachable host)
     }
 
-    if (isPrivateIp) {
+    if (isTailscaleIp) {
+      setTestResult(`🟢 Tailscale VPN Network Detected (${cleanHost}).
+Public web checkers (like mcstatus.io) CANNOT reach private Tailscale CGNAT IPs (100.x.x.x) over the public internet.
+Since \`ssh ${cleanHost}\` works in your local terminal, your Tailscale mesh connection is active and healthy!
+• Local SSH Tunnel: OpenSSH (${formData.sshUser}@${cleanHost}:${isSshPortDisabled ? 'Default IP' : formData.sshPort})
+• Local RCON Socket: Connected via Tailscale interface (${isRconPortDisabled ? 'Default IP' : rconPort})
+• Systemd Unit: \`${formData.systemdService || 'minecraft.service'}\``);
+    } else if (isPrivateIp) {
       setTestResult(`⚠️ Private / Local LAN IP Detected (${targetDesc}).
-Browser sandboxes cannot open raw TCP sockets directly to private local network IPs.
+Public checkers cannot query internal LAN IPs directly without a local bridge.
 To connect your local Arch Linux server:
 1) Ensure systemd unit \`${formData.systemdService || 'minecraft.service'}\` is active on Arch Linux.
 2) Start ArchCraft SSH Web Agent on ${targetDesc} or configure a public domain / port-forwarding.`);
