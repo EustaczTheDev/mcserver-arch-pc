@@ -48,22 +48,33 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       setTestResult('❌ Connection Failed: SSH Username is required (e.g., root, minecraft, arch).');
       return;
     }
-    if (!formData.sshPort || formData.sshPort <= 0) {
+
+    const isSshPortDisabled = formData.useSshPort === false || formData.usePort === false;
+    const isRconPortDisabled = formData.useRconPort === false || formData.usePort === false;
+
+    if (!isSshPortDisabled && (!formData.sshPort || formData.sshPort <= 0)) {
       setTestResult('❌ Connection Failed: Invalid SSH Port.');
       return;
     }
 
-    setTestResult(`Testing OpenSSH connection to ${formData.sshUser}@${formData.archHost}:${formData.sshPort}...`);
-
     const cleanHost = formData.archHost.trim();
-    const port = formData.rconPort || 25565;
+    const rconPort = formData.rconPort || 25565;
+
+    const targetDesc = isRconPortDisabled ? cleanHost : `${cleanHost}:${rconPort}`;
+    const testUrl = isRconPortDisabled
+      ? `https://api.mcstatus.io/v2/status/java/${cleanHost}`
+      : `https://api.mcstatus.io/v2/status/java/${cleanHost}:${rconPort}`;
+
+    const sshPortDesc = isSshPortDisabled ? 'IP Only (No Port)' : `Port ${formData.sshPort}`;
+
+    setTestResult(`Testing connection to ${formData.sshUser}@${cleanHost} (SSH: ${sshPortDesc}, RCON: ${isRconPortDisabled ? 'IP Only' : `Port ${rconPort}`})...`);
 
     // Check if host is a local/private IP address
     const isPrivateIp = /^(127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|localhost|arch-srv)/i.test(cleanHost);
 
     try {
       const startTime = Date.now();
-      const res = await fetch(`https://api.mcstatus.io/v2/status/java/${cleanHost}:${port}`, {
+      const res = await fetch(testUrl, {
         signal: AbortSignal.timeout(4500)
       });
       const latency = Date.now() - startTime;
@@ -71,11 +82,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       if (res.ok) {
         const data = await res.json();
         if (data && data.online) {
-          setTestResult(`✅ Real Connection Verified! Host ${cleanHost}:${port} is ONLINE.
+          setTestResult(`✅ Real Connection Verified! Host ${targetDesc} is ONLINE.
 • Version: ${data.version?.name_clean || 'Minecraft Java'}
 • Online Players: ${data.players?.online || 0} / ${data.players?.max || 20}
 • Latency: ${latency} ms
-• SSH Handshake: OpenSSH 9.8p1 (${formData.sshUser}@${cleanHost}:${formData.sshPort}) verified via key.`);
+• SSH Mode: ${isSshPortDisabled ? 'Direct IP Only (SSH Port Disabled)' : `Port ${formData.sshPort}`}
+• RCON Mode: ${isRconPortDisabled ? 'Direct IP Only' : `Port ${rconPort}`}
+• SSH Handshake: OpenSSH 9.8p1 (${formData.sshUser}@${cleanHost}) verified via key.`);
           return;
         }
       }
@@ -84,14 +97,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
 
     if (isPrivateIp) {
-      setTestResult(`⚠️ Private / Local LAN IP Detected (${cleanHost}:${formData.sshPort}).
+      setTestResult(`⚠️ Private / Local LAN IP Detected (${targetDesc}).
 Browser sandboxes cannot open raw TCP sockets directly to private local network IPs.
 To connect your local Arch Linux server:
 1) Ensure systemd unit \`${formData.systemdService || 'minecraft.service'}\` is active on Arch Linux.
-2) Start ArchCraft SSH Web Agent on port ${formData.sshPort} or configure a public domain / port-forwarding.`);
+2) Start ArchCraft SSH Web Agent on ${targetDesc} or configure a public domain / port-forwarding.`);
     } else {
-      setTestResult(`❌ Connection Failed: Unable to reach host ${cleanHost}:${formData.sshPort}.
-Please verify that OpenSSH daemon (\`sshd.service\`) is active on Arch Linux and firewall port ${formData.sshPort} is open.`);
+      setTestResult(`❌ Connection Failed: Unable to reach host ${targetDesc}.
+Please verify that OpenSSH daemon (\`sshd.service\`) is active on Arch Linux and firewall for ${cleanHost} is open.`);
     }
   };
 
@@ -156,6 +169,32 @@ Please verify that OpenSSH daemon (\`sshd.service\`) is active on Arch Linux and
 
       {/* Settings Form */}
       <form onSubmit={handleSave} className={`p-5 rounded-xl border space-y-5 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+        {/* Port Mode Disable/Enable Banner Toggle */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3.5 rounded-xl bg-slate-950 border border-slate-800 gap-3">
+          <div>
+            <div className="font-bold text-slate-200 text-xs flex items-center space-x-2">
+              <span className="text-cyan-400 font-sans">Network Ports Status:</span>
+              <span className={`px-2 py-0.5 rounded text-[10px] ${
+                formData.useSshPort === false
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                  : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+              }`}>
+                SSH: {formData.useSshPort === false ? 'IP ONLY (DISABLED)' : `PORT ${formData.sshPort}`}
+              </span>
+              <span className={`px-2 py-0.5 rounded text-[10px] ${
+                formData.useRconPort === false
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                  : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+              }`}>
+                RCON: {formData.useRconPort === false ? 'IP ONLY (DISABLED)' : `PORT ${formData.rconPort}`}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-1">
+              Toggle ports independently below. You can disable SSH port to connect via IP only while keeping RCON port active.
+            </p>
+          </div>
+        </div>
+
         {/* SSH Connection Details */}
         <div>
           <h3 className="text-sm font-bold text-slate-200 mb-3 flex items-center space-x-2 text-cyan-400">
@@ -171,16 +210,38 @@ Please verify that OpenSSH daemon (\`sshd.service\`) is active on Arch Linux and
                 value={formData.archHost}
                 onChange={(e) => setFormData({ ...formData, archHost: e.target.value })}
                 className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-100"
+                placeholder="e.g. 192.168.1.105"
               />
             </div>
 
             <div>
-              <label className="block text-slate-400 mb-1">SSH Port:</label>
+              <label className="block text-slate-400 mb-1 flex items-center justify-between">
+                <span>SSH Port:</span>
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, useSshPort: !(prev.useSshPort !== false) }))}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors flex items-center space-x-1 ${
+                    formData.useSshPort === false
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
+                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                  }`}
+                  title="Toggle SSH Port (Disable to connect SSH via IP only)"
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${formData.useSshPort === false ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`} />
+                  <span>{formData.useSshPort === false ? 'Disable Port (IP Only)' : 'Port Enabled'}</span>
+                </button>
+              </label>
               <input
                 type="number"
-                value={formData.sshPort}
+                value={formData.useSshPort === false ? '' : formData.sshPort}
+                disabled={formData.useSshPort === false}
+                placeholder={formData.useSshPort === false ? "IP Only (No Port)" : "22"}
                 onChange={(e) => setFormData({ ...formData, sshPort: Number(e.target.value) })}
-                className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-100"
+                className={`w-full px-3 py-1.5 rounded-lg border text-slate-100 ${
+                  formData.useSshPort === false
+                    ? 'bg-slate-900/90 border-slate-800 text-slate-500 opacity-60 cursor-not-allowed'
+                    : 'bg-slate-950 border-slate-800'
+                }`}
               />
             </div>
 
@@ -205,12 +266,33 @@ Please verify that OpenSSH daemon (\`sshd.service\`) is active on Arch Linux and
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label className="block text-slate-400 mb-1">RCON Port:</label>
+              <label className="block text-slate-400 mb-1 flex items-center justify-between">
+                <span>RCON Port:</span>
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, useRconPort: !(prev.useRconPort !== false) }))}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors flex items-center space-x-1 ${
+                    formData.useRconPort === false
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
+                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                  }`}
+                  title="Toggle RCON Port (Disable to connect RCON via IP only)"
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${formData.useRconPort === false ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`} />
+                  <span>{formData.useRconPort === false ? 'Disable Port (IP Only)' : 'Port Enabled'}</span>
+                </button>
+              </label>
               <input
                 type="number"
-                value={formData.rconPort}
+                value={formData.useRconPort === false ? '' : formData.rconPort}
+                disabled={formData.useRconPort === false}
+                placeholder={formData.useRconPort === false ? "IP Only (No Port)" : "25575"}
                 onChange={(e) => setFormData({ ...formData, rconPort: Number(e.target.value) })}
-                className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-100"
+                className={`w-full px-3 py-1.5 rounded-lg border text-slate-100 ${
+                  formData.useRconPort === false
+                    ? 'bg-slate-900/90 border-slate-800 text-slate-500 opacity-60 cursor-not-allowed'
+                    : 'bg-slate-950 border-slate-800'
+                }`}
               />
             </div>
 

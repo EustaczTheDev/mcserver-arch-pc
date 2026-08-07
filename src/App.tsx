@@ -430,14 +430,20 @@ export default function App() {
     }
 
     const host = currentProfile.archHost.trim();
+    const useRconPort = currentProfile.useRconPort !== false && currentProfile.usePort !== false;
     const port = currentProfile.rconPort || 25565;
-    showToast(`📡 Syncing live network status with ${host}:${port}...`);
-    addLogMessage('INFO', 'Network Bridge', `Initiated live status fetch for ${host}:${port}`);
+    const targetString = useRconPort ? `${host}:${port}` : host;
+    const apiEndpoint = useRconPort 
+      ? `https://api.mcstatus.io/v2/status/java/${host}:${port}`
+      : `https://api.mcstatus.io/v2/status/java/${host}`;
+
+    showToast(`📡 Syncing live network status with ${targetString}...`);
+    addLogMessage('INFO', 'Network Bridge', `Initiated live status fetch for ${targetString} (RCON Port: ${useRconPort ? port : 'IP Only'})`);
 
     const isPrivate = /^(127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|localhost|arch-srv)/i.test(host);
 
     try {
-      const res = await fetch(`https://api.mcstatus.io/v2/status/java/${host}:${port}`, {
+      const res = await fetch(apiEndpoint, {
         signal: AbortSignal.timeout(5000)
       });
       if (res.ok) {
@@ -452,7 +458,7 @@ export default function App() {
             mspt: Number((data.roundtripLatency || 18.2).toFixed(1)),
           }));
           setServerStatus('online');
-          setLiveServerNotice(`Live Data Active (${data.version?.name_clean || 'Minecraft Java'}, Ping: ${data.roundtripLatency || 20}ms)`);
+          setLiveServerNotice(`Live Data Active (${data.version?.name_clean || 'Minecraft Java'}, Ping: ${data.roundtripLatency || 20}ms, IP: ${host})`);
           showToast(`✅ Real Server ONLINE! (${onlineCount}/${maxCount} players)`);
           addLogMessage('INFO', 'Network Bridge', `Connected live server ${host}. Version: ${data.version?.name_clean}. Players: ${onlineCount}/${maxCount}`);
           return;

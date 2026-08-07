@@ -118,7 +118,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <p className="text-xs text-slate-400 font-mono mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
                 <span>OS: Arch Linux x86_64</span>
                 <span>•</span>
-                <span>Host: {currentProfile.archHost}:{currentProfile.rconPort || 25565}</span>
+                <span>
+                  Host: {currentProfile.usePort === false ? currentProfile.archHost : `${currentProfile.archHost}:${currentProfile.rconPort || 25565}`}
+                  {currentProfile.usePort === false && (
+                    <span className="ml-1 px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold">
+                      IP ONLY
+                    </span>
+                  )}
+                </span>
                 <span>•</span>
                 <span>Uptime: {formatUptime(metrics.uptimeSeconds)}</span>
               </p>

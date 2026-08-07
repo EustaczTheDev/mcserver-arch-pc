@@ -143,6 +143,9 @@ export interface ServerProfile {
   serverDir: string;
   systemdService: string;
   customStartCommand?: string;
+  usePort?: boolean; // General port enable/disable flag
+  useSshPort?: boolean; // When false, connects SSH using IP only
+  useRconPort?: boolean; // When false, connects RCON using IP only
   javaMaxRamGB: number;
   paperVersion: string;
   archKernel: string;
