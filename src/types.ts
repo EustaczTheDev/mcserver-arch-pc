@@ -146,6 +146,8 @@ export interface ServerProfile {
   usePort?: boolean; // General port enable/disable flag
   useSshPort?: boolean; // When false, connects SSH using IP only
   useRconPort?: boolean; // When false, connects RCON using IP only
+  agentPort?: number; // Port for Arch Linux Telemetry Agent (default 9111)
+  customAgentUrl?: string; // Custom URL for live Arch telemetry agent
   javaMaxRamGB: number;
   paperVersion: string;
   archKernel: string;

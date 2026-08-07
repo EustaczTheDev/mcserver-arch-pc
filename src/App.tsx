@@ -430,6 +430,8 @@ export default function App() {
     }
 
     const host = currentProfile.archHost.trim();
+    const agentPort = currentProfile.agentPort || 9111;
+    const agentEndpoint = currentProfile.customAgentUrl || `http://${host}:${agentPort}/stats`;
     const useRconPort = currentProfile.useRconPort !== false && currentProfile.usePort !== false;
     const port = currentProfile.rconPort || 25565;
     const targetString = useRconPort ? `${host}:${port}` : host;
@@ -437,15 +439,63 @@ export default function App() {
       ? `https://api.mcstatus.io/v2/status/java/${host}:${port}`
       : `https://api.mcstatus.io/v2/status/java/${host}`;
 
-    showToast(`📡 Syncing live network status with ${targetString}...`);
-    addLogMessage('INFO', 'Network Bridge', `Initiated live status fetch for ${targetString} (RCON Port: ${useRconPort ? port : 'IP Only'})`);
+    showToast(`📡 Syncing live network status with ${host}...`);
+    addLogMessage('INFO', 'Network Bridge', `Initiated live status fetch for ${host}`);
+
+    // 1. First: Try connecting to Arch Linux Telemetry Agent (Direct Python/systemd agent on Arch)
+    const agentEndpointsToTry = [
+      agentEndpoint,
+      `http://${host}:${agentPort}/`,
+      `http://${host}:${agentPort}/stats`
+    ];
+
+    let agentSuccess = false;
+    for (const url of agentEndpointsToTry) {
+      if (agentSuccess) break;
+      try {
+        const agentRes = await fetch(url, {
+          signal: AbortSignal.timeout(3000)
+        });
+        if (agentRes.ok) {
+          const agentData = await agentRes.json();
+          if (agentData) {
+            setMetrics(prev => ({
+              ...prev,
+              cpuPercent: typeof agentData.cpuPercent === 'number' ? agentData.cpuPercent : prev.cpuPercent,
+              memoryUsedMB: typeof agentData.memoryUsedMB === 'number' ? agentData.memoryUsedMB : prev.memoryUsedMB,
+              memoryTotalMB: typeof agentData.memoryTotalMB === 'number' ? agentData.memoryTotalMB : prev.memoryTotalMB,
+              uptimeSeconds: typeof agentData.uptimeSeconds === 'number' ? agentData.uptimeSeconds : prev.uptimeSeconds,
+              onlinePlayers: typeof agentData.onlinePlayers === 'number' ? agentData.onlinePlayers : prev.onlinePlayers,
+              maxPlayers: typeof agentData.maxPlayers === 'number' ? agentData.maxPlayers : prev.maxPlayers,
+              mspt: typeof agentData.mspt === 'number' ? agentData.mspt : prev.mspt,
+            }));
+
+            if (agentData.archKernel) {
+              setCurrentProfile(prev => ({ ...prev, archKernel: agentData.archKernel }));
+            }
+
+            const isOnline = agentData.systemdActive !== false && agentData.status !== 'stopped';
+            setServerStatus(isOnline ? 'online' : 'stopped');
+            setLiveServerNotice(`🔥 REAL ARCH LINUX AGENT CONNECTED (${host}:${agentPort}) | CPU: ${agentData.cpuPercent}% | RAM: ${agentData.memoryUsedMB}MB / ${agentData.memoryTotalMB}MB`);
+            showToast(`✅ Real Arch Linux Live Metrics Synced! (${host}:${agentPort})`);
+            addLogMessage('INFO', 'Arch Telemetry Agent', `Received live metrics from ${url}: CPU ${agentData.cpuPercent}%, RAM ${agentData.memoryUsedMB}/${agentData.memoryTotalMB}MB`);
+            agentSuccess = true;
+            return;
+          }
+        }
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        const isMixedContent = window.location.protocol === 'https:' && url.startsWith('http:');
+        addLogMessage('WARN', 'Arch Telemetry Agent', `Attempt to query ${url} failed: ${errMsg}${isMixedContent ? ' (Note: Browser blocked HTTP from HTTPS website due to Mixed Content security policy)' : ''}`);
+      }
+    }
 
     const isTailscale = /^100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\./.test(host);
     const isPrivate = isTailscale || /^(127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|localhost|arch-srv)/i.test(host);
 
     try {
       const res = await fetch(apiEndpoint, {
-        signal: AbortSignal.timeout(5000)
+        signal: AbortSignal.timeout(4000)
       });
       if (res.ok) {
         const data = await res.json();
@@ -471,13 +521,13 @@ export default function App() {
 
     if (isTailscale) {
       setServerStatus('online');
-      setLiveServerNotice(`🟢 Tailscale VPN Active (${host}) - SSH Direct Mesh Active`);
-      showToast(`🟢 Tailscale VPN IP Detected (${host}). Connected via Tailscale Mesh WireGuard.`);
-      addLogMessage('INFO', 'Network Bridge', `Host ${host} connected via Tailscale encrypted Mesh VPN.`);
+      setLiveServerNotice(`🟢 Tailscale Mesh Connected (${host}). Run the 1-line Arch Agent (Port ${agentPort}) to stream real CPU/RAM/systemd stats.`);
+      showToast(`🟢 Tailscale Mesh Connected (${host}). Run Arch Agent on port ${agentPort} for real stats.`);
+      addLogMessage('INFO', 'Network Bridge', `Host ${host} connected via Tailscale Mesh VPN. Arch Telemetry Agent standby on port ${agentPort}.`);
     } else if (isPrivate) {
-      setLiveServerNotice(`Local LAN IP (${host}). Browser sandbox cannot query local LAN IPs directly without a local proxy agent.`);
-      showToast(`⚠️ Local LAN IP (${host}). Simulating systemd SSH bridge metrics.`);
-      addLogMessage('WARN', 'Network Bridge', `Host ${host} is a local private IP. Systemd SSH bridge active.`);
+      setLiveServerNotice(`Local LAN IP (${host}). Run the Arch Telemetry Agent on port ${agentPort} to stream real CPU/RAM stats.`);
+      showToast(`⚠️ Local LAN IP (${host}). Run Arch Agent for real hardware telemetry.`);
+      addLogMessage('WARN', 'Network Bridge', `Host ${host} is a local private IP. Telemetry Agent standby on port ${agentPort}.`);
     } else {
       setServerStatus('offline');
       setLiveServerNotice(`Host ${host}:${port} is unreachable or offline.`);

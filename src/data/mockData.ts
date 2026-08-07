@@ -26,6 +26,7 @@ export const INITIAL_SERVER_PROFILES: ServerProfile[] = [
     usePort: true,
     useSshPort: true,
     useRconPort: true,
+    agentPort: 9111,
     javaMaxRamGB: 16,
     paperVersion: 'Paper-1.20.4-build-496 (OpenJDK 21)',
     archKernel: 'Linux 6.10.8-arch1-1 x86_64',

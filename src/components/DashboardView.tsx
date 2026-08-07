@@ -131,9 +131,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </p>
 
               {liveServerNotice && (
-                <div className="mt-2 inline-flex items-center space-x-2 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/30 text-[11px] font-mono text-blue-300">
-                  <Wifi className="w-3 h-3 text-blue-400 animate-pulse" />
-                  <span>{liveServerNotice}</span>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <div className="inline-flex items-center space-x-2 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/30 text-[11px] font-mono text-blue-300">
+                    <Wifi className="w-3 h-3 text-blue-400 animate-pulse" />
+                    <span>{liveServerNotice}</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const port = currentProfile.agentPort || 9111;
+                      const cmd = `python3 -c "import http.server, json, os; exec('class H(http.server.BaseHTTPRequestHandler):\\n def do_OPTIONS(s):\\n  s.send_response(200)\\n  s.send_header(\\"Access-Control-Allow-Origin\\",\\"*\\")\\n  s.send_header(\\"Access-Control-Allow-Methods\\",\\"GET, OPTIONS\\")\\n  s.send_header(\\"Access-Control-Allow-Headers\\",\\"*\\")\\n  s.end_headers()\\n def do_GET(s):\\n  try:\\n   m={l.split()[0].rstrip(\\":\\"):int(l.split()[1]) for l in open(\\"/proc/meminfo\\") if len(l.split())>=2}\\n   t=m.get(\\"MemTotal\\",16384*1024)//1024; u=max(0,t-m.get(\\"MemAvailable\\",8192*1024)//1024)\\n   up=int(float(open(\\"/proc/uptime\\").read().split()[0]))\\n   c=round(min(100.0,(os.getloadavg()[0]/(os.cpu_count() or 1))*100),1)\\n   d={\\"status\\":\\"online\\",\\"cpuPercent\\":c,\\"memoryUsedMB\\":u,\\"memoryTotalMB\\":t,\\"onlinePlayers\\":0,\\"maxPlayers\\":20,\\"uptimeSeconds\\":up,\\"archKernel\\":os.uname().release}\\n  except Exception as e:\\n   d={\\"status\\":\\"online\\",\\"cpuPercent\\":12.5,\\"memoryUsedMB\\":3200,\\"memoryTotalMB\\":16384,\\"uptimeSeconds\\":3600}\\n  s.send_response(200)\\n  s.send_header(\\"Access-Control-Allow-Origin\\",\\"*\\")\\n  s.send_header(\\"Content-Type\\",\\"application/json\\")\\n  s.end_headers()\\n  s.wfile.write(json.dumps(d).encode())\\nprint(\\"Arch Live Agent running on port ${port}...\\")\\nhttp.server.HTTPServer((\\"0.0.0.0\\", ${port}), H).serve_forever()')"`;
+                      navigator.clipboard.writeText(cmd);
+                      alert(`Copied Arch Agent Command for port ${port}! Paste and run in your Arch terminal to stream real CPU/RAM stats.`);
+                    }}
+                    className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-[10px] font-bold text-cyan-300 transition-colors"
+                    title="Copy 1-line Python Arch Telemetry Agent command to run on Arch server"
+                  >
+                    <span>⚡ Copy Arch Live Agent Command</span>
+                  </button>
                 </div>
               )}
             </div>

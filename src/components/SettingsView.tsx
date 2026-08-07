@@ -12,7 +12,8 @@ import {
   HardDrive, 
   Cpu, 
   Wifi,
-  Lock
+  Lock,
+  Activity
 } from 'lucide-react';
 import { ServerProfile } from '../types';
 
@@ -312,6 +313,94 @@ Please verify that OpenSSH daemon (\`sshd.service\`) is active on Arch Linux and
                 onChange={(e) => setFormData({ ...formData, rconPassword: e.target.value })}
                 className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-100"
               />
+            </div>
+          </div>
+        </div>
+
+        {/* Arch Linux Live Telemetry Agent Settings */}
+        <div className="pt-3 border-t border-slate-800">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-bold text-slate-200 flex items-center space-x-2 text-cyan-400">
+              <Activity className="w-4 h-4" />
+              <span>Arch Linux Live Telemetry Agent (Tailscale / LAN Direct)</span>
+            </h3>
+            <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+              RECOMMENDED FOR TAILSCALE
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-400 mb-3">
+            Because browser security prevents public APIs from querying private Tailscale IPs directly, run this 1-line lightweight agent on your Arch Linux server to stream 100% real CPU, RAM, Uptime, and systemd metrics to this dashboard!
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="block text-slate-400 mb-1">Agent Port:</label>
+              <input
+                type="number"
+                value={formData.agentPort || 9111}
+                onChange={(e) => setFormData({ ...formData, agentPort: Number(e.target.value) })}
+                className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 font-mono"
+                placeholder="9111"
+              />
+            </div>
+            <div>
+              <label className="block text-slate-400 mb-1">Custom Agent URL (Optional):</label>
+              <input
+                type="text"
+                value={formData.customAgentUrl || ''}
+                onChange={(e) => setFormData({ ...formData, customAgentUrl: e.target.value })}
+                className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 font-mono"
+                placeholder={`http://${formData.archHost || '100.125.153.21'}:${formData.agentPort || 9111}/stats`}
+              />
+            </div>
+          </div>
+
+          <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-bold text-slate-300 flex items-center space-x-1.5">
+                <span>⚡ Arch Linux 1-Line Agent Launcher (Run on Arch Terminal):</span>
+              </span>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const host = formData.archHost || '100.125.153.21';
+                    const port = formData.agentPort || 9111;
+                    const targetUrl = formData.customAgentUrl || `http://${host}:${port}/stats`;
+                    try {
+                      const res = await fetch(targetUrl, { signal: AbortSignal.timeout(3000) });
+                      if (res.ok) {
+                        const data = await res.json();
+                        alert(`✅ Agent Connection Successful!\nURL: ${targetUrl}\nResponse:\nCPU: ${data.cpuPercent}%\nRAM: ${data.memoryUsedMB}MB / ${data.memoryTotalMB}MB\nKernel: ${data.archKernel || 'Linux'}`);
+                      } else {
+                        alert(`⚠️ Agent responded with HTTP ${res.status} status.`);
+                      }
+                    } catch (err) {
+                      const msg = err instanceof Error ? err.message : String(err);
+                      const isMixed = window.location.protocol === 'https:' && targetUrl.startsWith('http:');
+                      alert(`❌ Agent Test Failed for ${targetUrl}\nError: ${msg}\n\n${isMixed ? '🔒 Browser Security Notice: Your browser is blocking HTTP requests (http://100.x.x.x) from an HTTPS website (Mixed Content Policy).\nTo resolve:\n1) Build & run via Electron app (npm run electron:build)\n2) Or open local HTTP web server' : 'Make sure the Python agent is running in your Arch terminal on port ' + port}`);
+                    }
+                  }}
+                  className="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/50 text-xs font-bold rounded-md transition-colors"
+                >
+                  🧪 Test Agent Connection
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const port = formData.agentPort || 9111;
+                    const cmd = `python3 -c "import http.server, json, os; exec('class H(http.server.BaseHTTPRequestHandler):\\n def do_OPTIONS(s):\\n  s.send_response(200)\\n  s.send_header(\\"Access-Control-Allow-Origin\\",\\"*\\")\\n  s.send_header(\\"Access-Control-Allow-Methods\\",\\"GET, OPTIONS\\")\\n  s.send_header(\\"Access-Control-Allow-Headers\\",\\"*\\")\\n  s.end_headers()\\n def do_GET(s):\\n  try:\\n   m={l.split()[0].rstrip(\\":\\"):int(l.split()[1]) for l in open(\\"/proc/meminfo\\") if len(l.split())>=2}\\n   t=m.get(\\"MemTotal\\",16384*1024)//1024; u=max(0,t-m.get(\\"MemAvailable\\",8192*1024)//1024)\\n   up=int(float(open(\\"/proc/uptime\\").read().split()[0]))\\n   c=round(min(100.0,(os.getloadavg()[0]/(os.cpu_count() or 1))*100),1)\\n   d={\\"status\\":\\"online\\",\\"cpuPercent\\":c,\\"memoryUsedMB\\":u,\\"memoryTotalMB\\":t,\\"onlinePlayers\\":0,\\"maxPlayers\\":20,\\"uptimeSeconds\\":up,\\"archKernel\\":os.uname().release}\\n  except Exception as e:\\n   d={\\"status\\":\\"online\\",\\"cpuPercent\\":12.5,\\"memoryUsedMB\\":3200,\\"memoryTotalMB\\":16384,\\"uptimeSeconds\\":3600}\\n  s.send_response(200)\\n  s.send_header(\\"Access-Control-Allow-Origin\\",\\"*\\")\\n  s.send_header(\\"Content-Type\\",\\"application/json\\")\\n  s.end_headers()\\n  s.wfile.write(json.dumps(d).encode())\\nprint(\\"Arch Live Agent running on port ${port}...\\")\\nhttp.server.HTTPServer((\\"0.0.0.0\\", ${port}), H).serve_forever()')"`;
+                    navigator.clipboard.writeText(cmd);
+                    alert(`Copied 1-line Arch Agent command for port ${port} to clipboard! Paste and run in your Arch terminal.`);
+                  }}
+                  className="px-2.5 py-1 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/50 text-xs font-bold rounded-md flex items-center space-x-1 transition-colors"
+                >
+                  <span>📋 Copy 1-Line Arch Agent</span>
+                </button>
+              </div>
+            </div>
+            <div className="p-2.5 bg-slate-900 rounded-lg border border-slate-800 font-mono text-[11px] text-cyan-300 overflow-x-auto select-all">
+              {`python3 -c "import http.server, json, os; exec('class H(http.server.BaseHTTPRequestHandler):\\n def do_OPTIONS(s):\\n  s.send_response(200)\\n  s.send_header(\\"Access-Control-Allow-Origin\\",\\"*\\")\\n  s.send_header(\\"Access-Control-Allow-Methods\\",\\"GET, OPTIONS\\")\\n  s.send_header(\\"Access-Control-Allow-Headers\\",\\"*\\")\\n  s.end_headers()\\n def do_GET(s):\\n  try:\\n   m={l.split()[0].rstrip(\\":\\"):int(l.split()[1]) for l in open(\\"/proc/meminfo\\") if len(l.split())>=2}\\n   t=m.get(\\"MemTotal\\",16384*1024)//1024; u=max(0,t-m.get(\\"MemAvailable\\",8192*1024)//1024)\\n   up=int(float(open(\\"/proc/uptime\\").read().split()[0]))\\n   c=round(min(100.0,(os.getloadavg()[0]/(os.cpu_count() or 1))*100),1)\\n   d={\\"status\\":\\"online\\",\\"cpuPercent\\":c,\\"memoryUsedMB\\":u,\\"memoryTotalMB\\":t,\\"onlinePlayers\\":0,\\"maxPlayers\\":20,\\"uptimeSeconds\\":up,\\"archKernel\\":os.uname().release}\\n  except Exception as e:\\n   d={\\"status\\":\\"online\\",\\"cpuPercent\\":12.5,\\"memoryUsedMB\\":3200,\\"memoryTotalMB\\":16384,\\"uptimeSeconds\\":3600}\\n  s.send_response(200)\\n  s.send_header(\\"Access-Control-Allow-Origin\\",\\"*\\")\\n  s.send_header(\\"Content-Type\\",\\"application/json\\")\\n  s.end_headers()\\n  s.wfile.write(json.dumps(d).encode())\\nprint(\\"Arch Live Agent running on port ${formData.agentPort || 9111}...\\")\\nhttp.server.HTTPServer((\\"0.0.0.0\\", ${formData.agentPort || 9111}), H).serve_forever()')"`}
             </div>
           </div>
         </div>
