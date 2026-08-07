@@ -1,0 +1,6 @@
+{
+  "name": "ArchCraft Server Manager",
+  "description": "Professional Windows application for controlling Arch Linux-hosted Minecraft servers with real-time telemetry, live console, player management, plugin store & editor, automated backups, and graphical file explorer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
